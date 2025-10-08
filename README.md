@@ -64,40 +64,40 @@ node_modules/
 A template used for commit messages to encourage clear, consistent messages.
 
 ```text
-# feat: ✨ 
-# feat: 🔍 
-# feat: 🔗 
-# feat: 🔒 
+# feat: 
+# feat: 
+# feat: 
+# feat: 
 
-# fix: 🐛 
-# fix: 🐞 
-# fix: 🩹 
-# fix: 🚑️ 
+# fix: 
+# fix: 
+# fix: 
+# fix: 
 
-# style: 💅 
-# style: 🎨 
-# style: 💄 
+# style: 
+# style: 
+# style: 
 
-# ci: 🦊 
-# ci: 📦 
+# ci: 
+# ci: 
 
-# deploy: 🚀 
-# deploy: 📦 
+# deploy: 
+# deploy: 
 
-# chore: 🧹 
-# chore: 🔧 
-# chore: ⚙️ 
-# docs: 📜 
+# chore: 
+# chore: 
+# chore: 
+# docs: 
 
-# refactor: 🔨 
-# perf: 🚀 
+# refactor: 
+# perf: 
 
-# test: 🚦 
-# debug: 🧪 
+# test: 
+# debug: 
 
-# BREAKING CHANGE: 🚨 
-# BREAKING CHANGE: 💥 
-# BREAKING CHANGE: 💣 
+# BREAKING CHANGE: 
+# BREAKING CHANGE: 
+# BREAKING CHANGE: 
 ```
 
 ## Installation
