@@ -86,7 +86,7 @@
   singlekey = true
 
 [commit]
-	gpgsign = true
+  gpgsign = true
   template = ~/.config/git/commit-template-txt
 
 [tag]
