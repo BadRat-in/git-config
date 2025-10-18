@@ -22,3 +22,5 @@ zig-out/
 *.swp
 .idea
 
+
+**/.claude/settings.local.json

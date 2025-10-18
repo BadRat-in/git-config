@@ -8,8 +8,8 @@
 
 [user]
   name = BadRat-in
-  email = rbmorena42@gmail.com
-  signingkey = 60BBC4C61751F5E1
+  email = user@example.com
+	signingkey = XXXXXXXXXXXXXXXXXXX
 
 [init]
   defaultBranch = main
@@ -86,7 +86,7 @@
   singlekey = true
 
 [commit]
-  gpgsign = true
+	gpgsign = true
   template = ~/.config/git/commit-template-txt
 
 [tag]
