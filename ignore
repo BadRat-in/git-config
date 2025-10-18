@@ -6,6 +6,10 @@ __pycache__/
 .ruff_cache/
 .ropeproject/
 
+# Python environments
+.env*
+.venv*
+
 # Rust specific
 target/
 
