@@ -19,7 +19,7 @@ TEMPLATE_DIR_DEFAULT="$HOME/.config/git/templates"
 # Files to download from repository
 # Format: "remote_name:local_name"
 FILES="
-commit-template-txt:commit-template.txt
+commit-template-txt:commit-template-txt
 config:config
 ignore:ignore
 "
@@ -29,6 +29,10 @@ OPTIONAL_FILES="
 commitlint.config.js:commitlint.config.js
 package.json:package.json
 hooks/commit-msg.sh:hooks/commit-msg.sh
+git-hook-install.sh:git-hook-install.sh
+git_shortcut.zsh:git_shortcut.zsh
+git_shortcut.bash:git_shortcut.bash
+git_shortcut.sh:git_shortcut.sh
 "
 
 # ============================================================================
@@ -80,6 +84,7 @@ GLOBAL_HOOKS=0
 APPLY_HERE=0
 REPOS=""
 TEMPLATE_DIR="$TEMPLATE_DIR_DEFAULT"
+SETUP_SHELL_INTEGRATION=0
 
 show_usage() {
     cat << EOF
@@ -96,6 +101,7 @@ OPTIONS:
     --apply-here            Install commit-msg hook in current repository
     --repos PATHS           Comma-separated paths to repos (use with --install-husky)
     --template-dir PATH     Override template directory (default: $TEMPLATE_DIR_DEFAULT)
+    --setup-shell           Add git shortcuts and hook installer to shell config
     -h, --help              Show this help message
 
 EXAMPLES:
@@ -156,6 +162,10 @@ while [ $# -gt 0 ]; do
         --template-dir)
             TEMPLATE_DIR="$2"
             shift 2
+            ;;
+        --setup-shell)
+            SETUP_SHELL_INTEGRATION=1
+            shift
             ;;
         -h|--help)
             show_usage
@@ -611,6 +621,139 @@ install_husky_workflow() {
 }
 
 # ============================================================================
+# SHELL INTEGRATION
+# ============================================================================
+
+detect_shell() {
+    # Try to detect current shell
+    if [ -n "$SHELL" ]; then
+        basename "$SHELL"
+    elif [ -n "$ZSH_VERSION" ]; then
+        echo "zsh"
+    elif [ -n "$BASH_VERSION" ]; then
+        echo "bash"
+    else
+        echo "sh"
+    fi
+}
+
+get_shell_config_file() {
+    shell_name="$1"
+    case "$shell_name" in
+        zsh)
+            if [ -f "$HOME/.zshrc" ]; then
+                echo "$HOME/.zshrc"
+            else
+                echo "$HOME/.zshrc"  # Will be created
+            fi
+            ;;
+        bash)
+            if [ -f "$HOME/.bashrc" ]; then
+                echo "$HOME/.bashrc"
+            elif [ -f "$HOME/.bash_profile" ]; then
+                echo "$HOME/.bash_profile"
+            else
+                echo "$HOME/.bashrc"  # Will be created
+            fi
+            ;;
+        fish)
+            echo "$HOME/.config/fish/config.fish"
+            ;;
+        *)
+            echo "$HOME/.profile"
+            ;;
+    esac
+}
+
+setup_shell_integration() {
+    shell_name=$(detect_shell)
+    config_file=$(get_shell_config_file "$shell_name")
+
+    info "Detected shell: $shell_name"
+    info "Shell config file: $config_file"
+
+    # Determine the correct git shortcuts file extension
+    case "$shell_name" in
+        zsh)
+            shortcuts_ext="zsh"
+            ;;
+        bash)
+            shortcuts_ext="bash"
+            ;;
+        fish)
+            shortcuts_ext="fish"
+            ;;
+        *)
+            shortcuts_ext="sh"
+            ;;
+    esac
+
+    shortcuts_file="$CONFIG_DIR/git_shortcut.$shortcuts_ext"
+
+    # Check if git shortcuts file exists, otherwise look for generic one
+    if [ ! -f "$shortcuts_file" ]; then
+        # Try .sh version as fallback
+        if [ -f "$CONFIG_DIR/git_shortcut.sh" ]; then
+            shortcuts_file="$CONFIG_DIR/git_shortcut.sh"
+        elif [ -f "$CONFIG_DIR/git_shortcut.zsh" ]; then
+            shortcuts_file="$CONFIG_DIR/git_shortcut.zsh"
+        else
+            warn "Git shortcuts file not found, skipping shortcuts integration"
+            shortcuts_file=""
+        fi
+    fi
+
+    # Backup shell config
+    if [ -f "$config_file" ]; then
+        backup="${config_file}.bak.$(date +%Y%m%d_%H%M%S)"
+        info "Backing up shell config to: $backup"
+        cp "$config_file" "$backup"
+    else
+        info "Creating new shell config file: $config_file"
+        mkdir -p "$(dirname "$config_file")"
+        touch "$config_file"
+    fi
+
+    # Add git shortcuts
+    if [ -n "$shortcuts_file" ] && [ -f "$shortcuts_file" ]; then
+        if ! grep -q "source.*git_shortcut" "$config_file" 2>/dev/null; then
+            info "Adding git shortcuts to shell config..."
+            cat >> "$config_file" << EOF
+
+# Git shortcuts (added by git-config installer)
+if [ -f "$shortcuts_file" ]; then
+    source "$shortcuts_file"
+fi
+EOF
+            success "Git shortcuts added to $config_file"
+        else
+            info "Git shortcuts already configured in shell config"
+        fi
+    fi
+
+    # Add git hook installer to PATH
+    hook_installer="$CONFIG_DIR/git-hook-install.sh"
+    if [ -f "$hook_installer" ]; then
+        if ! grep -q "git-hook-install" "$config_file" 2>/dev/null; then
+            info "Adding git hook installer alias to shell config..."
+            cat >> "$config_file" << EOF
+
+# Git hook installer (added by git-config installer)
+alias git-hook-install="$hook_installer"
+EOF
+            success "Hook installer alias added to $config_file"
+        else
+            info "Hook installer already configured in shell config"
+        fi
+    fi
+
+    echo ""
+    success "Shell integration complete!"
+    info "To apply changes, run: source $config_file"
+    info "Or restart your terminal"
+}
+
+# ============================================================================
 # SUMMARY AND CLEANUP
 # ============================================================================
 
@@ -730,6 +873,10 @@ main() {
 
     if [ "$INSTALL_HUSKY" = "1" ]; then
         install_husky_workflow
+    fi
+
+    if [ "$SETUP_SHELL_INTEGRATION" = "1" ]; then
+        setup_shell_integration
     fi
 
     # Show summary

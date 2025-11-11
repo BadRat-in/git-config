@@ -1,6 +1,6 @@
 [core]
   excludesfile = ~/.config/git/ignore
-  editor = nvim
+  editor = nano
   autocrlf = input  # keep newlines as in input
   compression = 9  # trade cpu for network
   fsync = none

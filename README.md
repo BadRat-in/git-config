@@ -143,6 +143,19 @@ curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.s
 # For existing repos, use --apply-here or manually copy the hook.
 ```
 
+**With Shell Integration (Recommended):**
+
+```sh
+# Install with shell config integration (adds git shortcuts and hook installer alias)
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
+  --setup-shell
+
+# This will:
+# - Add git shortcuts (ga, gc, gp, etc.) to your shell config
+# - Add 'git-hook-install' alias for easy hook installation
+# - Auto-detect your shell (zsh, bash, fish, etc.)
+```
+
 **With Husky/Commitlint (For Node.js Projects):**
 
 ```sh
@@ -213,8 +226,20 @@ If you prefer to install manually:
    # Copy the standalone hook
    cp ~/.config/git/hooks/commit-msg.sh .git/hooks/commit-msg
 
-   # Make it executable
+   # Make it executable (required)
    chmod +x .git/hooks/commit-msg
+
+   # Or with numeric permissions
+   chmod 755 .git/hooks/commit-msg
+   ```
+
+   **Quick command (if you have shell integration):**
+   ```sh
+   # Navigate to your repository
+   cd /path/to/your/repo
+
+   # Run the installer alias (requires --setup-shell from main installation)
+   git-hook-install
    ```
 
    **Global template for all new repositories:**
@@ -233,6 +258,48 @@ If you prefer to install manually:
    # Apply to existing repo (run in repo directory)
    git init
    ```
+
+## Git Shortcuts
+
+If you installed with `--setup-shell`, the following git shortcuts are available in your shell:
+
+```sh
+ga='git add'              # Stage files
+gap='git add --patch'     # Stage files interactively
+gb='git branch'           # List branches
+gba='git branch --all'    # List all branches (including remote)
+gc='git commit'           # Commit changes
+gca='git commit --amend --no-edit'  # Amend last commit without editing message
+gce='git commit --amend'  # Amend last commit and edit message
+gco='git checkout'        # Switch branches
+gcl='git clone --recursive'  # Clone with submodules
+gd='git diff'             # Show changes
+gds='git diff --staged'   # Show staged changes
+gi='git init'             # Initialize repository
+gl='git log --graph --all --pretty=format:...'  # Pretty log
+gm='git merge'            # Merge branches
+gn='git checkout -b'      # Create new branch
+gp='git push'             # Push changes
+gr='git reset'            # Reset changes
+gs='git status --short'   # Short status
+gu='git pull'             # Pull changes
+```
+
+These shortcuts are defined in `~/.config/git/git_shortcut.zsh` (or `.bash`, `.sh` depending on your shell) and are automatically sourced from your shell config file.
+
+## Quick Hook Installation Tool
+
+After installing with `--setup-shell`, you can use the `git-hook-install` command to quickly install commit message validation hooks in any repository:
+
+```sh
+# Navigate to any git repository
+cd /path/to/your/repo
+
+# Install the hook
+git-hook-install
+```
+
+This is equivalent to manually copying and making the hook executable, but much faster and easier to remember!
 
 ## Optional: Enabling GPG Signing
 
