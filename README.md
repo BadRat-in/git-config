@@ -130,12 +130,17 @@ curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.s
 **With Commit Message Validation (Recommended for Teams):**
 
 ```sh
-# Set up global hooks template with standalone validation (no Node.js required)
+# Option 1: Quick install hook in current repository only
+cd /path/to/your/repo
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
+  --apply-here
+
+# Option 2: Set up global hooks template for all new repositories
 curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
   --global-hooks
 
-# This installs the POSIX shell hook that validates conventional commits
-# Works on all systems without requiring Node.js, npm, or commitlint
+# Note: Global hooks (--global-hooks) only apply to NEW repos created after setup.
+# For existing repos, use --apply-here or manually copy the hook.
 ```
 
 **With Husky/Commitlint (For Node.js Projects):**
@@ -193,6 +198,14 @@ If you prefer to install manually:
 
 4. (Optional) Set up commit message validation hook:
 
+   **Quick method (recommended):**
+   ```sh
+   # Navigate to your repository and run the installer with --apply-here
+   cd /path/to/your/repo
+   ~/.config/git/install.sh --apply-here
+   ```
+
+   **Manual method:**
    ```sh
    # Create hooks directory in your repository
    mkdir -p .git/hooks
@@ -204,7 +217,7 @@ If you prefer to install manually:
    chmod +x .git/hooks/commit-msg
    ```
 
-   Or set up a global template directory for all new repositories:
+   **Global template for all new repositories:**
 
    ```sh
    # Create template directory

@@ -77,6 +77,7 @@ USER_NAME=""
 USER_EMAIL=""
 INSTALL_HUSKY=0
 GLOBAL_HOOKS=0
+APPLY_HERE=0
 REPOS=""
 TEMPLATE_DIR="$TEMPLATE_DIR_DEFAULT"
 
@@ -92,6 +93,7 @@ OPTIONS:
     --email EMAIL           Set git user.email
     --install-husky         Install Husky + Commitlint + lint-staged in repos
     --global-hooks          Set up global git template directory for hooks
+    --apply-here            Install commit-msg hook in current repository
     --repos PATHS           Comma-separated paths to repos (use with --install-husky)
     --template-dir PATH     Override template directory (default: $TEMPLATE_DIR_DEFAULT)
     -h, --help              Show this help message
@@ -103,11 +105,14 @@ EXAMPLES:
     # Non-interactive with user info
     $0 --yes --name "John Doe" --email "john@example.com"
 
+    # Set up global hooks template (for all new repositories)
+    $0 --global-hooks
+
+    # Install hook in current repository only
+    $0 --apply-here
+
     # Install with Husky in specific repos
     $0 --install-husky --repos "/path/to/repo1,/path/to/repo2"
-
-    # Install with global hooks template
-    $0 --install-husky --global-hooks
 
 EXIT CODES:
     0    Success
@@ -138,6 +143,10 @@ while [ $# -gt 0 ]; do
             ;;
         --global-hooks)
             GLOBAL_HOOKS=1
+            shift
+            ;;
+        --apply-here)
+            APPLY_HERE=1
             shift
             ;;
         --repos)
@@ -528,6 +537,40 @@ EOF
     info "To apply to existing repos, run: git init in each repo"
 }
 
+install_standalone_hook() {
+    repo_path="${1:-.}"
+
+    info "Installing standalone commit-msg hook in: $repo_path"
+
+    # Check if it's a git repository
+    if [ ! -d "$repo_path/.git" ]; then
+        error "$repo_path is not a Git repository"
+        error "Initialize it first with: git init"
+        return 1
+    fi
+
+    # Check if hook file exists in config directory
+    if [ ! -f "$CONFIG_DIR/hooks/commit-msg.sh" ]; then
+        error "Hook file not found: $CONFIG_DIR/hooks/commit-msg.sh"
+        error "Please run the main installation first"
+        return 1
+    fi
+
+    # Create hooks directory if it doesn't exist
+    mkdir -p "$repo_path/.git/hooks"
+
+    # Copy the hook
+    info "Copying commit-msg hook..."
+    cp "$CONFIG_DIR/hooks/commit-msg.sh" "$repo_path/.git/hooks/commit-msg"
+    chmod +x "$repo_path/.git/hooks/commit-msg"
+
+    success "Standalone hook installed in $repo_path/.git/hooks/commit-msg"
+    info "The hook will now validate all commit messages in this repository"
+    info ""
+    info "Test it with: echo 'test: invalid' | git commit -F -"
+    info "Or try a valid commit: git commit -m 'feat: add new feature here'"
+}
+
 install_husky_workflow() {
     check_node_npm
 
@@ -624,6 +667,22 @@ main() {
     echo "Repository: https://github.com/BadRat-in/git-config"
     echo ""
 
+    # Special case: --apply-here only installs hook in current repo
+    if [ "$APPLY_HERE" = "1" ]; then
+        info "Quick hook installation mode (--apply-here)"
+        echo ""
+
+        # Check if config files exist, download if needed
+        if [ ! -f "$CONFIG_DIR/hooks/commit-msg.sh" ]; then
+            info "Hook file not found locally, downloading..."
+            check_downloader
+            install_config_files
+        fi
+
+        install_standalone_hook "$(pwd)"
+        exit 0
+    fi
+
     # Run prerequisite checks
     check_downloader
 
@@ -642,6 +701,10 @@ main() {
             echo "  4. Install Husky + Commitlint + lint-staged in repositories"
         fi
 
+        if [ "$GLOBAL_HOOKS" = "1" ]; then
+            echo "  5. Set up global git template directory for hooks"
+        fi
+
         echo ""
 
         if ! prompt_yes_no "Continue with installation?" "y"; then
@@ -653,6 +716,10 @@ main() {
     # Execute installation steps
     install_config_files
     configure_gitconfig
+
+    if [ "$GLOBAL_HOOKS" = "1" ] && [ "$INSTALL_HUSKY" != "1" ]; then
+        setup_global_hooks
+    fi
 
     if [ "$INSTALL_HUSKY" = "1" ]; then
         install_husky_workflow
