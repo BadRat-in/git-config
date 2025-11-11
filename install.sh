@@ -770,7 +770,8 @@ show_summary() {
     echo "  - $CONFIG_DIR/commit-template.txt"
     echo "  - $GITCONFIG"
 
-    if [ -f "${GITCONFIG}.bak."* ]; then
+    # Check if any backup files exist
+    if ls "${GITCONFIG}.bak."* >/dev/null 2>&1; then
         echo ""
         echo "${BOLD}Backups:${RESET}"
         ls -1 "${GITCONFIG}.bak."* 2>/dev/null | while read -r backup; do
