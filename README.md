@@ -2,7 +2,7 @@
 
 This repository stores personal Git configuration files to help set up a consistent development environment across systems. All files are intended to be placed under `~/.config/git/`.
 
-**Note:** This repo contains configuration for _my preferences_, If you can copy them but it might require you to change configuration for your system.
+**Note:** This repository contains shared Git configuration for teams. The configuration is designed to work out-of-the-box without requiring GPG keys. Team members can optionally configure GPG signing if desired.
 
 ## Structure
 
@@ -11,7 +11,7 @@ This repository stores personal Git configuration files to help set up a consist
 ├── config                # Main Git config (equivalent to ~/.gitconfig)
 ├── ignore                # Global .gitignore file
 └── commit-template.txt   # Default commit message template
-````
+```
 
 ## Files
 
@@ -63,46 +63,107 @@ node_modules/
 
 A template used for commit messages to encourage clear, consistent messages.
 
+### `hooks/commit-msg.sh`
+
+A standalone POSIX shell script that validates commit messages against Conventional Commits format. This hook:
+
+- Requires NO dependencies (no Node.js, npm, or commitlint)
+- Works on any POSIX-compliant system (macOS, Linux, BSD)
+- Validates commit format: `type(scope)?: subject`
+- Enforces lowercase subject, no trailing period
+- Enforces minimum subject length of 10 characters
+- Validates subject maximum length of 72 characters
+- Allows merge commits and reverts to bypass validation
+- Validates BREAKING CHANGE formatting
+- Provides helpful error messages with examples
+
 ```text
-# feat: 
-# feat: 
-# feat: 
-# feat: 
+# feat:
+# fix:
+# style:
+# ci:
+# deploy:
 
-# fix: 
-# fix: 
-# fix: 
-# fix: 
+# chore:
+# docs:
+# refactor:
 
-# style: 
-# style: 
-# style: 
-
-# ci: 
-# ci: 
-
-# deploy: 
-# deploy: 
-
-# chore: 
-# chore: 
-# chore: 
-# docs: 
-
-# refactor: 
-# perf: 
-
-# test: 
-# debug: 
-
-# BREAKING CHANGE: 
-# BREAKING CHANGE: 
-# BREAKING CHANGE: 
+# perf:
+# test:
+# debug:
+# BREAKING CHANGE:
 ```
 
 ## Installation
 
-To use this configuration:
+### Quick Install (Recommended)
+
+Run the automated installer script:
+
+```sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh)"
+```
+
+Or with wget:
+
+```sh
+sh -c "$(wget -qO- https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh)"
+```
+
+**Interactive Installation:**
+The script will prompt you for your name and email, and automatically:
+
+- Backup your existing `~/.gitconfig`
+- Create `~/.config/git/` directory
+- Download all configuration files
+- Set up your user information
+
+**Non-Interactive Installation:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
+  --yes \
+  --name "Your Name" \
+  --email "your.email@example.com"
+```
+
+**With Commit Message Validation (Recommended for Teams):**
+
+```sh
+# Set up global hooks template with standalone validation (no Node.js required)
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
+  --global-hooks
+
+# This installs the POSIX shell hook that validates conventional commits
+# Works on all systems without requiring Node.js, npm, or commitlint
+```
+
+**With Husky/Commitlint (For Node.js Projects):**
+
+```sh
+# Install hooks in specific Node.js repositories
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
+  --install-husky \
+  --repos "/path/to/repo1,/path/to/repo2"
+
+# Set up global hooks template with Node.js-based validation
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
+  --install-husky \
+  --global-hooks
+```
+
+**Help and Options:**
+
+```sh
+# Download and view all options
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh --help
+```
+
+### Manual Installation
+
+If you prefer to install manually:
 
 1. Clone or copy the files into your config directory:
 
@@ -111,16 +172,89 @@ To use this configuration:
    cp -r path/to/this/repo/* ~/.config/git/
    ```
 
-2. Copy the config file into the ~/.gitconfig file:
+2. Create or update your `~/.gitconfig` file:
 
    ```sh
-   cp ~/.config/git/config ~/.gitconfig
+   cat >> ~/.gitconfig << 'EOF'
+   [user]
+       name = Your Name
+       email = your.email@example.com
+
+   [include]
+       path = ~/.config/git/config
+   EOF
    ```
 
-3. (Optional) Verify the settings:
+3. Verify the settings:
 
    ```sh
    git config --list --show-origin
+   ```
+
+4. (Optional) Set up commit message validation hook:
+
+   ```sh
+   # Create hooks directory in your repository
+   mkdir -p .git/hooks
+
+   # Copy the standalone hook
+   cp ~/.config/git/hooks/commit-msg.sh .git/hooks/commit-msg
+
+   # Make it executable
+   chmod +x .git/hooks/commit-msg
+   ```
+
+   Or set up a global template directory for all new repositories:
+
+   ```sh
+   # Create template directory
+   mkdir -p ~/.config/git/templates/hooks
+
+   # Copy the hook
+   cp ~/.config/git/hooks/commit-msg.sh ~/.config/git/templates/hooks/commit-msg
+   chmod +x ~/.config/git/templates/hooks/commit-msg
+
+   # Configure git to use the template
+   git config --global init.templateDir ~/.config/git/templates
+
+   # Apply to existing repo (run in repo directory)
+   git init
+   ```
+
+## Optional: Enabling GPG Signing
+
+By default, GPG signing is disabled to ensure the configuration works for all team members. If you want to enable commit and tag signing:
+
+1. Generate a GPG key (if you don't have one):
+
+   ```sh
+   gpg --full-generate-key
+   ```
+
+2. List your GPG keys and copy the key ID:
+
+   ```sh
+   gpg --list-secret-keys --keyid-format=long
+   ```
+
+3. Configure Git to use your GPG key:
+
+   ```sh
+   git config --global user.signingkey YOUR_KEY_ID
+   git config --global commit.gpgsign true
+   git config --global tag.gpgsign true
+   ```
+
+4. (Optional) Configure GPG program if needed:
+
+   ```sh
+   git config --global gpg.program gpg
+   ```
+
+5. Add your GPG key to GitHub/GitLab (copy public key):
+
+   ```sh
+   gpg --armor --export YOUR_KEY_ID
    ```
 
 ## License

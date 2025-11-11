@@ -6,10 +6,13 @@
   fsync = none
   whitespace = error  # threat incorrect whitespace as errors
 
-[user]
-  name = BadRat-in
-  email = user@example.com
-	signingkey = XXXXXXXXXXXXXXXXXXX
+# [user]
+# User configuration will be set by install.sh or manually in ~/.gitconfig
+# Example:
+# [user]
+#   name = Your Name
+#   email = your.email@example.com
+#   signingkey = YOUR_GPG_KEY  # Optional: only if you want to sign commits
 
 [init]
   defaultBranch = main
@@ -86,10 +89,12 @@
   singlekey = true
 
 [commit]
-  gpgsign = true
+  gpgsign = false  # Set to true if you want to sign commits (requires GPG key)
   template = ~/.config/git/commit-template-txt
 
 [tag]
-  gpgSign = true
-[gpg]
-	program = gpg
+  gpgSign = false  # Set to true if you want to sign tags (requires GPG key)
+
+# [gpg]
+# Uncomment and configure if using GPG signing:
+# program = gpg
