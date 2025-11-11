@@ -249,14 +249,21 @@ prompt_input() {
     prompt="$1"
     current_value="$2"
 
+    # Output prompt to stderr so it's visible when using command substitution
     if [ -n "$current_value" ]; then
-        printf "%s\n" "$current_value"
-        return
+        printf "%s [%s]: " "$prompt" "$current_value" >&2
+    else
+        printf "%s: " "$prompt" >&2
     fi
 
-    printf "%s: " "$prompt"
     read -r input
-    printf "%s\n" "$input"
+
+    # If user just pressed Enter and there's a current value, use it
+    if [ -z "$input" ] && [ -n "$current_value" ]; then
+        printf "%s\n" "$current_value"
+    else
+        printf "%s\n" "$input"
+    fi
 }
 
 # ============================================================================
