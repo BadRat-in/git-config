@@ -688,6 +688,23 @@ setup_shell_integration() {
             ;;
     esac
 
+    # Add git hook installer to PATH
+    hook_installer="$CONFIG_DIR/git-hook-install.sh"
+    if [ -f "$hook_installer" ]; then
+        if ! grep -q "git-hook-install" "$config_file" 2>/dev/null; then
+            info "Adding git hook installer alias to shell config..."
+            cat >> "$config_file" << EOF
+
+# Git hook installer (added by git-config installer)
+alias git-hook-install="$hook_installer"
+alias ghi="git-hook-install"
+EOF
+            success "Hook installer alias added to $config_file"
+        else
+            info "Hook installer already configured in shell config"
+        fi
+    fi
+
     shortcuts_file="$CONFIG_DIR/git_shortcut.$shortcuts_ext"
 
     # Check if git shortcuts file exists, otherwise look for generic one
@@ -728,22 +745,6 @@ EOF
             success "Git shortcuts added to $config_file"
         else
             info "Git shortcuts already configured in shell config"
-        fi
-    fi
-
-    # Add git hook installer to PATH
-    hook_installer="$CONFIG_DIR/git-hook-install.sh"
-    if [ -f "$hook_installer" ]; then
-        if ! grep -q "git-hook-install" "$config_file" 2>/dev/null; then
-            info "Adding git hook installer alias to shell config..."
-            cat >> "$config_file" << EOF
-
-# Git hook installer (added by git-config installer)
-alias git-hook-install="$hook_installer"
-EOF
-            success "Hook installer alias added to $config_file"
-        else
-            info "Hook installer already configured in shell config"
         fi
     fi
 

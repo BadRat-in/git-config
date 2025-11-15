@@ -9,7 +9,7 @@ alias gco='git checkout'
 alias gcl='git clone --recursive'
 alias gd='git diff --output-indicator-new=" " --output-indicator-old=" "'
 alias gds='gd --staged'
-alias gi='git init'
+alias gi='git init && git-hook-install'
 alias gl='git log --graph --all --pretty=format:"%C(magenta)%h %C(white) %an  %ar%C(blue)  %D%n%s%n"'
 alias gm='git merge'
 alias gn='git checkout -b'  # new branch
