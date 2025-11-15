@@ -259,6 +259,16 @@ prompt_input() {
     prompt="$1"
     current_value="$2"
 
+    # In non-interactive mode, use current value or return empty
+    if [ "$AUTO_YES" = "1" ]; then
+        if [ -n "$current_value" ]; then
+            printf "%s\n" "$current_value"
+        else
+            printf "\n"
+        fi
+        return
+    fi
+
     # Output prompt to stderr so it's visible when using command substitution
     if [ -n "$current_value" ]; then
         printf "%s [%s]: " "$prompt" "$current_value" >&2
@@ -382,6 +392,13 @@ configure_gitconfig() {
     if [ -z "$USER_EMAIL" ]; then
         current_email=$(git config --global user.email 2>/dev/null || echo "")
         USER_EMAIL=$(prompt_input "Enter your Git email" "$current_email")
+    fi
+
+    # Validate that we have user name and email
+    if [ -z "$USER_NAME" ] || [ -z "$USER_EMAIL" ]; then
+        error "User name and email are required"
+        error "Provide them via --name and --email flags, or run without --yes for interactive mode"
+        exit 1
     fi
 
     # Backup existing .gitconfig
