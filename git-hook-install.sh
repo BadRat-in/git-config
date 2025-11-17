@@ -43,18 +43,38 @@ fi
 # Create hooks directory if it doesn't exist
 mkdir -p "$GIT_DIR/hooks"
 
-# Backup existing hook if present
+# Backup existing hook if present (intelligent backup system)
 if [ -f "$HOOK_DEST" ]; then
+    # Remove old backups to prevent clutter
+    rm -f "${HOOK_DEST}.backup."* 2>/dev/null || true
+
     BACKUP="$HOOK_DEST.backup.$(date +%Y%m%d_%H%M%S)"
     info "Backing up existing hook to: $BACKUP"
-    cp "$HOOK_DEST" "$BACKUP"
+    if ! cp "$HOOK_DEST" "$BACKUP"; then
+        error "Failed to create backup"
+        exit 1
+    fi
 fi
 
 # Copy and make executable
 info "Installing commit-msg hook..."
-cp "$HOOK_SOURCE" "$HOOK_DEST"
-chmod 755 "$HOOK_DEST"
+if cp "$HOOK_SOURCE" "$HOOK_DEST" && chmod 755 "$HOOK_DEST"; then
+    # Installation successful, remove backup
+    if [ -f "$BACKUP" ]; then
+        info "Cleaning up backup..."
+        rm -f "$BACKUP"
+    fi
 
-success "Commit message validation hook installed successfully!"
-info "Hook location: $HOOK_DEST"
-info "Try committing with an invalid message to test the hook."
+    success "Commit message validation hook installed successfully!"
+    info "Hook location: $HOOK_DEST"
+    info "Try committing with an invalid message to test the hook."
+else
+    # Installation failed, restore backup
+    error "Installation failed!"
+    if [ -f "$BACKUP" ]; then
+        info "Restoring from backup..."
+        mv "$BACKUP" "$HOOK_DEST"
+        info "Previous hook restored"
+    fi
+    exit 1
+fi

@@ -79,12 +79,20 @@ error() {
 AUTO_YES=0
 USER_NAME=""
 USER_EMAIL=""
+USER_GPG_KEY=""
+USER_GPG_PROGRAM=""
+ENABLE_GPG_SIGN=0
+USER_EDITOR=""
 INSTALL_HUSKY=0
 GLOBAL_HOOKS=0
 APPLY_HERE=0
+UPDATE_ONLY=0
 REPOS=""
 TEMPLATE_DIR="$TEMPLATE_DIR_DEFAULT"
 SETUP_SHELL_INTEGRATION=0
+
+# Track backup files for cleanup/rollback
+BACKUP_FILES=""
 
 show_usage() {
     cat << EOF
@@ -99,6 +107,7 @@ OPTIONS:
     --install-husky         Install Husky + Commitlint + lint-staged in repos
     --global-hooks          Set up global git template directory for hooks
     --apply-here            Install commit-msg hook in current repository
+    --update                Update only hooks/commit-msg.sh and git_shortcut.zsh
     --repos PATHS           Comma-separated paths to repos (use with --install-husky)
     --template-dir PATH     Override template directory (default: $TEMPLATE_DIR_DEFAULT)
     --setup-shell           Add git shortcuts and hook installer to shell config
@@ -116,6 +125,9 @@ EXAMPLES:
 
     # Install hook in current repository only
     $0 --apply-here
+
+    # Update only the commit hook and git shortcuts
+    $0 --update
 
     # Install with Husky in specific repos
     $0 --install-husky --repos "/path/to/repo1,/path/to/repo2"
@@ -153,6 +165,10 @@ while [ $# -gt 0 ]; do
             ;;
         --apply-here)
             APPLY_HERE=1
+            shift
+            ;;
+        --update)
+            UPDATE_ONLY=1
             shift
             ;;
         --repos)
@@ -345,12 +361,51 @@ backup_file() {
         return 0
     fi
 
+    # Remove old backups first (cleanup from previous installations)
+    rm -f "${file}.bak."* 2>/dev/null || true
+
     timestamp=$(date +%Y%m%d_%H%M%S)
     backup="${file}.bak.${timestamp}"
 
     info "Backing up $file to $backup"
-    cp "$file" "$backup"
-    success "Backup created at $backup"
+    if cp "$file" "$backup"; then
+        # Track this backup for later cleanup/rollback
+        BACKUP_FILES="$BACKUP_FILES $backup"
+        success "Backup created at $backup"
+        return 0
+    else
+        error "Failed to create backup of $file"
+        return 1
+    fi
+}
+
+cleanup_backups() {
+    # Remove all backup files created during this installation
+    if [ -n "$BACKUP_FILES" ]; then
+        info "Cleaning up backup files..."
+        for backup in $BACKUP_FILES; do
+            if [ -f "$backup" ]; then
+                rm -f "$backup"
+                info "Removed backup: $backup"
+            fi
+        done
+        success "Backup cleanup complete"
+    fi
+}
+
+rollback_changes() {
+    # Restore all backup files created during this installation
+    if [ -n "$BACKUP_FILES" ]; then
+        error "Installation failed, rolling back changes..."
+        for backup in $BACKUP_FILES; do
+            if [ -f "$backup" ]; then
+                original="${backup%.bak.*}"
+                info "Restoring $original from $backup"
+                mv "$backup" "$original"
+            fi
+        done
+        warn "Rollback complete. Your previous configuration has been restored."
+    fi
 }
 
 # ============================================================================
@@ -398,32 +453,157 @@ configure_gitconfig() {
     if [ -z "$USER_NAME" ] || [ -z "$USER_EMAIL" ]; then
         error "User name and email are required"
         error "Provide them via --name and --email flags, or run without --yes for interactive mode"
+        rollback_changes
         exit 1
     fi
 
-    # Backup existing .gitconfig
-    backup_file "$GITCONFIG"
+    # Prompt for editor selection
+    info "Editor configuration..."
+    if [ "$AUTO_YES" != "1" ]; then
+        current_editor=$(git config --global core.editor 2>/dev/null || echo "nano")
+        echo ""
+        info "Available editors: nano, vim, vi, nvim, emacs, code (VS Code), etc."
+        USER_EDITOR=$(prompt_input "Enter your preferred editor" "$current_editor")
+        if [ -z "$USER_EDITOR" ]; then
+            USER_EDITOR="nano"
+        fi
+    else
+        USER_EDITOR="nano"
+    fi
 
-    # Create new .gitconfig
-    info "Creating new $GITCONFIG"
+    # Prompt for GPG configuration
+    info "GPG signing configuration (optional)..."
+    if [ "$AUTO_YES" != "1" ]; then
+        if prompt_yes_no "Do you want to enable GPG signing for commits and tags?" "n"; then
+            ENABLE_GPG_SIGN=1
+
+            # Try to get current GPG key and program
+            current_gpg=$(git config --global user.signingkey 2>/dev/null || echo "")
+            current_gpg_program=$(git config --global gpg.program 2>/dev/null || echo "gpg")
+
+            # List available GPG keys if gpg is installed
+            if command -v gpg >/dev/null 2>&1; then
+                echo ""
+                info "Available GPG keys:"
+                gpg --list-secret-keys --keyid-format=long 2>/dev/null || info "No GPG keys found. Generate one with: gpg --full-generate-key"
+                echo ""
+            fi
+
+            USER_GPG_KEY=$(prompt_input "Enter your GPG key ID (or leave empty to skip)" "$current_gpg")
+
+            if [ -z "$USER_GPG_KEY" ]; then
+                warn "No GPG key provided, GPG signing will remain disabled"
+                ENABLE_GPG_SIGN=0
+            else
+                # Ask for GPG program
+                echo ""
+                info "GPG program configuration (default: gpg)"
+                USER_GPG_PROGRAM=$(prompt_input "Enter GPG program path" "$current_gpg_program")
+                if [ -z "$USER_GPG_PROGRAM" ]; then
+                    USER_GPG_PROGRAM="gpg"
+                fi
+            fi
+        fi
+    fi
+
+    # Backup existing config file
+    backup_file "$CONFIG_DIR/config" || {
+        rollback_changes
+        exit 1
+    }
+
+    # Update the config file with user settings
+    info "Updating $CONFIG_DIR/config with user settings..."
+
+    # Read the template config and add user section at the top
+    if [ -f "$CONFIG_DIR/config" ]; then
+        # Create temporary file with user config
+        temp_config="${CONFIG_DIR}/config.tmp"
+
+        cat > "$temp_config" << EOF
+# User Configuration
+# This section contains personal user settings
+
+[user]
+	name = $USER_NAME
+	email = $USER_EMAIL
+EOF
+
+        # Add GPG key if provided
+        if [ "$ENABLE_GPG_SIGN" = "1" ] && [ -n "$USER_GPG_KEY" ]; then
+            cat >> "$temp_config" << EOF
+	signingkey = $USER_GPG_KEY
+EOF
+        fi
+
+        # Add a separator
+        echo "" >> "$temp_config"
+        echo "# ============================================================================" >> "$temp_config"
+        echo "# Shared Configuration (applies to all team members)" >> "$temp_config"
+        echo "# ============================================================================" >> "$temp_config"
+        echo "" >> "$temp_config"
+
+        # Append the rest of the config, skipping the old [user] and [gpg] comment sections
+        sed '/^# \[user\]/,/^#   signingkey/d; /^# \[gpg\]/,/^# program = gpg/d' "$CONFIG_DIR/config" >> "$temp_config"
+
+        # Update editor if specified
+        if [ -n "$USER_EDITOR" ]; then
+            sed -i.tmp "s|editor = .*|editor = $USER_EDITOR|g" "$temp_config"
+            rm -f "${temp_config}.tmp"
+        fi
+
+        # Update GPG signing settings if enabled
+        if [ "$ENABLE_GPG_SIGN" = "1" ] && [ -n "$USER_GPG_KEY" ]; then
+            sed -i.tmp 's/gpgsign = false/gpgsign = true/g; s/gpgSign = false/gpgSign = true/g' "$temp_config"
+            rm -f "${temp_config}.tmp"
+
+            # Add GPG program configuration
+            echo "" >> "$temp_config"
+            echo "[gpg]" >> "$temp_config"
+            echo "	program = $USER_GPG_PROGRAM" >> "$temp_config"
+            echo "" >> "$temp_config"
+        fi
+
+        # Replace the original with updated version
+        mv "$temp_config" "$CONFIG_DIR/config" || {
+            error "Failed to update config file"
+            rollback_changes
+            exit 1
+        }
+
+        success "Updated $CONFIG_DIR/config with user settings"
+    else
+        error "Config file not found at $CONFIG_DIR/config"
+        rollback_changes
+        exit 1
+    fi
+
+    # Create minimal .gitconfig that just includes our config
+    backup_file "$GITCONFIG" || {
+        rollback_changes
+        exit 1
+    }
 
     cat > "$GITCONFIG" << EOF
 # Git Configuration
 # Generated by git-config installer on $(date)
 # Repository: https://github.com/BadRat-in/git-config
+#
+# All configuration is managed in ~/.config/git/config
+# This provides a single source of truth for all git settings
 
-[user]
-	name = $USER_NAME
-	email = $USER_EMAIL
-
-# Include shared configuration from ~/.config/git/config
 [include]
 	path = $CONFIG_DIR/config
 
 EOF
 
-    success "Created $GITCONFIG with user settings and include directive"
+    success "Created $GITCONFIG with include directive"
     success "User: $USER_NAME <$USER_EMAIL>"
+    success "Editor: $USER_EDITOR"
+    if [ "$ENABLE_GPG_SIGN" = "1" ] && [ -n "$USER_GPG_KEY" ]; then
+        success "GPG signing enabled with key: $USER_GPG_KEY"
+        success "GPG program: $USER_GPG_PROGRAM"
+    fi
 }
 
 # ============================================================================
@@ -605,6 +785,65 @@ install_standalone_hook() {
     info "Or try a valid commit: git commit -m 'feat: add new feature here'"
 }
 
+update_files() {
+    info "Update mode: Only replacing hooks/commit-msg.sh and git_shortcut.zsh"
+    echo ""
+
+    # Check if config directory exists
+    if [ ! -d "$CONFIG_DIR" ]; then
+        error "Configuration directory not found: $CONFIG_DIR"
+        error "Please run full installation first"
+        exit 1
+    fi
+
+    # Backup existing files
+    if [ -f "$CONFIG_DIR/hooks/commit-msg.sh" ]; then
+        backup_file "$CONFIG_DIR/hooks/commit-msg.sh" || {
+            rollback_changes
+            exit 1
+        }
+    fi
+
+    if [ -f "$CONFIG_DIR/git_shortcut.zsh" ]; then
+        backup_file "$CONFIG_DIR/git_shortcut.zsh" || {
+            rollback_changes
+            exit 1
+        }
+    fi
+
+    # Download updated files
+    info "Downloading latest commit-msg hook..."
+    if ! download_file "hooks/commit-msg.sh" "$CONFIG_DIR/hooks/commit-msg.sh" 0; then
+        rollback_changes
+        exit 1
+    fi
+
+    info "Downloading latest git shortcuts (zsh)..."
+    if ! download_file "git_shortcut.zsh" "$CONFIG_DIR/git_shortcut.zsh" 0; then
+        rollback_changes
+        exit 1
+    fi
+
+    # Cleanup backups on success
+    cleanup_backups
+
+    echo ""
+    success "Files updated successfully!"
+    echo ""
+    echo "${BOLD}Updated Files:${RESET}"
+    echo "  - $CONFIG_DIR/hooks/commit-msg.sh"
+    echo "  - $CONFIG_DIR/git_shortcut.zsh"
+    echo ""
+    echo "${BOLD}Next Steps:${RESET}"
+    echo "  - If you have global hooks template set up, copy the new hook:"
+    echo "    cp $CONFIG_DIR/hooks/commit-msg.sh $TEMPLATE_DIR/hooks/commit-msg"
+    echo "  - To apply hook to an existing repository:"
+    echo "    cp $CONFIG_DIR/hooks/commit-msg.sh /path/to/repo/.git/hooks/commit-msg"
+    echo "  - Reload your shell to use updated shortcuts:"
+    echo "    source ~/.zshrc  (or your shell config file)"
+    echo ""
+}
+
 install_husky_workflow() {
     check_node_npm
 
@@ -705,23 +944,6 @@ setup_shell_integration() {
             ;;
     esac
 
-    # Add git hook installer to PATH
-    hook_installer="$CONFIG_DIR/git-hook-install.sh"
-    if [ -f "$hook_installer" ]; then
-        if ! grep -q "git-hook-install" "$config_file" 2>/dev/null; then
-            info "Adding git hook installer alias to shell config..."
-            cat >> "$config_file" << EOF
-
-# Git hook installer (added by git-config installer)
-alias git-hook-install="$hook_installer"
-alias ghi="git-hook-install"
-EOF
-            success "Hook installer alias added to $config_file"
-        else
-            info "Hook installer already configured in shell config"
-        fi
-    fi
-
     shortcuts_file="$CONFIG_DIR/git_shortcut.$shortcuts_ext"
 
     # Check if git shortcuts file exists, otherwise look for generic one
@@ -737,11 +959,12 @@ EOF
         fi
     fi
 
-    # Backup shell config
+    # Backup shell config using our backup system
     if [ -f "$config_file" ]; then
-        backup="${config_file}.bak.$(date +%Y%m%d_%H%M%S)"
-        info "Backing up shell config to: $backup"
-        cp "$config_file" "$backup"
+        backup_file "$config_file" || {
+            error "Failed to backup shell config"
+            return 1
+        }
     else
         info "Creating new shell config file: $config_file"
         mkdir -p "$(dirname "$config_file")"
@@ -783,37 +1006,29 @@ show_summary() {
     echo ""
 
     echo "${BOLD}Created/Modified Files:${RESET}"
-    echo "  - $CONFIG_DIR/config"
+    echo "  - $CONFIG_DIR/config (single source of truth)"
     echo "  - $CONFIG_DIR/ignore"
     echo "  - $CONFIG_DIR/commit-template.txt"
-    echo "  - $GITCONFIG"
-
-    # Check if any backup files exist
-    if ls "${GITCONFIG}.bak."* >/dev/null 2>&1; then
-        echo ""
-        echo "${BOLD}Backups:${RESET}"
-        ls -1 "${GITCONFIG}.bak."* 2>/dev/null | while read -r backup; do
-            echo "  - $backup"
-        done
-    fi
+    echo "  - $GITCONFIG (includes config file)"
 
     echo ""
     echo "${BOLD}Git User Configuration:${RESET}"
-    echo "  Name:  $USER_NAME"
-    echo "  Email: $USER_EMAIL"
+    echo "  Name:   $USER_NAME"
+    echo "  Email:  $USER_EMAIL"
+    echo "  Editor: $USER_EDITOR"
+    if [ "$ENABLE_GPG_SIGN" = "1" ] && [ -n "$USER_GPG_KEY" ]; then
+        echo "  GPG Key: $USER_GPG_KEY (signing enabled)"
+        echo "  GPG Program: $USER_GPG_PROGRAM"
+    fi
 
     echo ""
     echo "${BOLD}Verify Installation:${RESET}"
     echo "  git config --list --show-origin"
 
     echo ""
-    echo "${BOLD}Undo Instructions:${RESET}"
-    echo "  To restore your previous configuration:"
-    echo "    mv ${GITCONFIG}.bak.* $GITCONFIG"
-    if [ "$GLOBAL_HOOKS" = "1" ]; then
-        echo "  To remove global template directory:"
-        echo "    git config --global --unset init.templateDir"
-    fi
+    echo "${BOLD}Configuration Location:${RESET}"
+    echo "  All settings are stored in: $CONFIG_DIR/config"
+    echo "  This provides a single source of truth for your Git configuration"
 
     echo ""
     echo "${BOLD}Next Steps:${RESET}"
@@ -835,6 +1050,15 @@ main() {
     echo "${BOLD}Git Configuration Installer${RESET}"
     echo "Repository: https://github.com/BadRat-in/git-config"
     echo ""
+
+    # Special case: --update only updates hook and shortcut files
+    if [ "$UPDATE_ONLY" = "1" ]; then
+        info "Update mode: Replacing only hook and shortcut files"
+        echo ""
+        check_downloader
+        update_files
+        exit 0
+    fi
 
     # Special case: --apply-here only installs hook in current repo
     if [ "$APPLY_HERE" = "1" ]; then
@@ -883,20 +1107,39 @@ main() {
     fi
 
     # Execute installation steps
-    install_config_files
-    configure_gitconfig
+    install_config_files || {
+        rollback_changes
+        exit 1
+    }
+
+    configure_gitconfig || {
+        rollback_changes
+        exit 1
+    }
 
     if [ "$GLOBAL_HOOKS" = "1" ] && [ "$INSTALL_HUSKY" != "1" ]; then
-        setup_global_hooks
+        setup_global_hooks || {
+            rollback_changes
+            exit 1
+        }
     fi
 
     if [ "$INSTALL_HUSKY" = "1" ]; then
-        install_husky_workflow
+        install_husky_workflow || {
+            rollback_changes
+            exit 1
+        }
     fi
 
     if [ "$SETUP_SHELL_INTEGRATION" = "1" ]; then
-        setup_shell_integration
+        setup_shell_integration || {
+            rollback_changes
+            exit 1
+        }
     fi
+
+    # All installation steps succeeded, cleanup backups
+    cleanup_backups
 
     # Show summary
     show_summary

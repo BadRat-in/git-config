@@ -1,3 +1,13 @@
+# Add git hook installer to PATH
+hook_installer="$HOME/.config/git/git-hook-install.sh"
+if [ -f "$hook_installer" ]; then
+  alias git-hook-install="$hook_installer"
+  alias ghi="git-hook-install"
+else
+  alias git-hook-install=true
+fi
+
+# Git shortcuts
 alias ga='git add'
 alias gap='ga --patch'
 alias gb='git branch'
@@ -10,6 +20,7 @@ alias gcl='git clone --recursive'
 alias gd='git diff --output-indicator-new=" " --output-indicator-old=" "'
 alias gds='gd --staged'
 alias gi='git init && git-hook-install'
+alias gf='git fetch'
 alias gl='git log --graph --all --pretty=format:"%C(magenta)%h %C(white) %an  %ar%C(blue)  %D%n%s%n"'
 alias gm='git merge'
 alias gn='git checkout -b'  # new branch

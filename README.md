@@ -1,8 +1,14 @@
 # Local Git Configuration
 
-This repository stores personal Git configuration files to help set up a consistent development environment across systems. All files are intended to be placed under `~/.config/git/`.
+This repository stores Git configuration files to help set up a consistent development environment across systems. All files are placed under `~/.config/git/`.
 
-**Note:** This repository contains shared Git configuration for teams. The configuration is designed to work out-of-the-box without requiring GPG keys. Team members can optionally configure GPG signing if desired.
+**Key Architecture:** This configuration follows a **single source of truth** principle - all Git settings (both personal user info and shared team settings) are stored in `~/.config/git/config`. Your `~/.gitconfig` file contains only a minimal include directive. This approach provides:
+- Single location to manage all Git configuration
+- Easy backup and synchronization
+- Clear separation between user settings and shared settings
+- Simplified troubleshooting
+
+**Note:** GPG signing is optional and can be configured during installation. The installer will prompt you and automatically configure everything if desired.
 
 ## Structure
 
@@ -15,29 +21,37 @@ This repository stores personal Git configuration files to help set up a consist
 
 ## Files
 
-### `config` (formerly `~/.gitconfig`)
+### `config`
 
-This file contains your personal Git configuration, including user info, aliases, diff settings, and references to the ignore file and commit template. Example contents:
+This is the **single source of truth** for all Git configuration. After installation, it contains:
 
-```ini
-[user]
-  name = Your Name
-  email = you@example.com
+1. **User Settings** (at the top):
+   ```ini
+   [user]
+     name = Your Name
+     email = you@example.com
+     signingkey = YOUR_GPG_KEY  # Optional, only if GPG enabled
+   ```
 
-[core]
-  excludesFile = ~/.config/git/ignore
-  editor = nvim
-  autocrlf = input
+2. **Shared Team Settings** (below):
+   ```ini
+   [core]
+     excludesFile = ~/.config/git/ignore
+     editor = nano  # Your chosen editor (nano, vim, nvim, code, etc.)
+     autocrlf = input
 
-[commit]
-  template = ~/.config/git/commit-template.txt
+   [commit]
+     template = ~/.config/git/commit-template.txt
+     gpgsign = false  # Changed to true if GPG enabled
 
-[alias]
-  co = checkout
-  br = branch
-  ci = commit
-  st = status
-```
+   [alias]
+     # Various helpful aliases
+
+   [gpg]  # Only added if GPG signing enabled
+     program = gpg  # Your GPG program path
+   ```
+
+The installer automatically merges your personal settings with the shared configuration during setup.
 
 ### `ignore`
 
@@ -111,12 +125,22 @@ sh -c "$(wget -qO- https://raw.githubusercontent.com/BadRat-in/git-config/main/i
 ```
 
 **Interactive Installation:**
-The script will prompt you for your name and email, and automatically:
+The script will prompt you for:
+- Your name and email
+- Preferred editor (default: nano)
+- GPG configuration (optional):
+  - Enable GPG signing?
+  - GPG key ID
+  - GPG program path (default: gpg)
 
-- Backup your existing `~/.gitconfig`
+And automatically:
+- Backup existing files (auto-cleaned on success)
 - Create `~/.config/git/` directory
 - Download all configuration files
-- Set up your user information
+- Write your user information to `~/.config/git/config`
+- Configure editor preference
+- Create minimal `~/.gitconfig` with include directive
+- Configure GPG signing if requested (including gpg.program)
 
 **Non-Interactive Installation:**
 
@@ -125,6 +149,14 @@ curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.s
   --yes \
   --name "Your Name" \
   --email "your.email@example.com"
+```
+
+**Update Existing Installation:**
+
+```sh
+# Update only the commit-msg hook and git shortcuts (preserves other config)
+curl -fsSL https://raw.githubusercontent.com/BadRat-in/git-config/main/install.sh | sh -s -- \
+  --update
 ```
 
 **With Commit Message Validation (Recommended for Teams):**
@@ -190,26 +222,44 @@ If you prefer to install manually:
    cp -r path/to/this/repo/* ~/.config/git/
    ```
 
-2. Create or update your `~/.gitconfig` file:
+2. Update the `config` file with your user information at the top:
 
    ```sh
-   cat >> ~/.gitconfig << 'EOF'
+   # Edit ~/.config/git/config and add at the very top:
+   cat > ~/.config/git/config.tmp << 'EOF'
    [user]
        name = Your Name
        email = your.email@example.com
+       # signingkey = YOUR_GPG_KEY  # Optional
+
+   # ============================================================================
+   # Shared Configuration
+   # ============================================================================
+
+   EOF
+   cat ~/.config/git/config >> ~/.config/git/config.tmp
+   mv ~/.config/git/config.tmp ~/.config/git/config
+   ```
+
+3. Create minimal `~/.gitconfig` with include directive:
+
+   ```sh
+   cat > ~/.gitconfig << 'EOF'
+   # Git Configuration
+   # All settings are managed in ~/.config/git/config
 
    [include]
        path = ~/.config/git/config
    EOF
    ```
 
-3. Verify the settings:
+4. Verify the settings:
 
    ```sh
    git config --list --show-origin
    ```
 
-4. (Optional) Set up commit message validation hook:
+5. (Optional) Set up commit message validation hook:
 
    **Quick method (recommended):**
    ```sh
@@ -301,9 +351,17 @@ git-hook-install
 
 This is equivalent to manually copying and making the hook executable, but much faster and easier to remember!
 
-## Optional: Enabling GPG Signing
+## GPG Signing Configuration
 
-By default, GPG signing is disabled to ensure the configuration works for all team members. If you want to enable commit and tag signing:
+GPG signing is **automatically configured during installation** if you choose to enable it. The installer will:
+- Detect and list your available GPG keys
+- Prompt you to enter your key ID
+- Prompt you to enter GPG program path (default: gpg)
+- Write the key to `[user]` section in `~/.config/git/config`
+- Add `[gpg]` section with program configuration
+- Automatically enable signing for commits and tags
+
+**If you didn't enable GPG during installation and want to enable it now:**
 
 1. Generate a GPG key (if you don't have one):
 
@@ -317,25 +375,34 @@ By default, GPG signing is disabled to ensure the configuration works for all te
    gpg --list-secret-keys --keyid-format=long
    ```
 
-3. Configure Git to use your GPG key:
+3. Edit `~/.config/git/config` (single source of truth):
 
    ```sh
-   git config --global user.signingkey YOUR_KEY_ID
-   git config --global commit.gpgsign true
-   git config --global tag.gpgsign true
+   # Add to the [user] section at the top:
+   [user]
+       name = Your Name
+       email = your.email@example.com
+       signingkey = YOUR_KEY_ID
+
+   # Change these settings from false to true:
+   [commit]
+       gpgsign = true
+
+   [tag]
+       gpgSign = true
+
+   # Add at the end of the file:
+   [gpg]
+       program = gpg  # Or gpg2, /usr/local/bin/gpg, etc.
    ```
 
-4. (Optional) Configure GPG program if needed:
-
-   ```sh
-   git config --global gpg.program gpg
-   ```
-
-5. Add your GPG key to GitHub/GitLab (copy public key):
+4. Add your GPG key to GitHub/GitLab (copy public key):
 
    ```sh
    gpg --armor --export YOUR_KEY_ID
    ```
+
+**Note:** All configuration is done in `~/.config/git/config` - this is the single source of truth. You don't need to modify `~/.gitconfig`.
 
 ## License
 
