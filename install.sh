@@ -554,7 +554,10 @@ EOF
 
         # Update GPG signing settings if enabled
         if [ "$ENABLE_GPG_SIGN" = "1" ] && [ -n "$USER_GPG_KEY" ]; then
-            sed -i.tmp 's/gpgsign = false/gpgsign = true/g; s/gpgSign = false/gpgSign = true/g' "$temp_config"
+            # Only enable signing in [commit] and [tag] sections, NOT [push]
+            # GitHub and most remotes don't support signed pushes
+            sed -i.tmp '/^\[commit\]/,/^\[/ s/gpgsign = false/gpgsign = true/' "$temp_config"
+            sed -i.tmp '/^\[tag\]/,/^\[/ s/gpgSign = false/gpgSign = true/' "$temp_config"
             rm -f "${temp_config}.tmp"
 
             # Add GPG program configuration

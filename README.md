@@ -360,6 +360,7 @@ GPG signing is **automatically configured during installation** if you choose to
 - Write the key to `[user]` section in `~/.config/git/config`
 - Add `[gpg]` section with program configuration
 - Automatically enable signing for commits and tags
+- **Note:** Push signing (`push.gpgSign`) remains disabled as GitHub/GitLab don't support it
 
 **If you didn't enable GPG during installation and want to enable it now:**
 
@@ -394,6 +395,11 @@ GPG signing is **automatically configured during installation** if you choose to
    # Add at the end of the file:
    [gpg]
        program = gpg  # Or gpg2, /usr/local/bin/gpg, etc.
+
+   # IMPORTANT: Keep push.gpgSign = false
+   # GitHub/GitLab don't support signed pushes, only signed commits
+   [push]
+       gpgSign = false  # Leave this as false!
    ```
 
 4. Add your GPG key to GitHub/GitLab (copy public key):
